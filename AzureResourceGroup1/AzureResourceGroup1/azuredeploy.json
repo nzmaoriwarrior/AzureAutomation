@@ -1,0 +1,191 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "TPVM007Name": {
+            "type": "string",
+          "minLength": 1,
+          "defaultValue": "TPVM007"
+        },
+        "TPVM007AdminUserName": {
+            "type": "string",
+          "minLength": 1,
+          "defaultValue": "lcladmin"
+        },
+        "TPVM007AdminPassword": {
+            "type": "securestring"
+        },
+        "TPVM007WindowsOSVersion": {
+            "type": "string",
+            "defaultValue": "2012-R2-Datacenter",
+            "allowedValues": [
+                "2008-R2-SP1",
+                "2012-Datacenter",
+                "2012-R2-Datacenter",
+                "Windows-Server-Technical-Preview"
+            ]
+        },
+      "_artifactsLocation": {
+        "type": "string",
+        "metadata": {
+          "description": "Auto-generated container in staging storage account to receive post-build staging folder upload"
+        }
+        
+      },
+
+
+      "_artifactsLocationSasToken": {
+        "type": "securestring",
+        "metadata": {
+          "description": "Auto-generated token to access _artifactsLocation"
+        }
+        
+
+      },
+        "Artifact LocationUpdateTagVersion": {
+          "type": "string",
+                      "defaultValue": "1.0",
+            "metadata": {
+                "description": "This value must be changed from a previous deployment to ensure the extension will run"
+            }
+        },
+        "iisdscUpdateTagVersion": {
+            "type": "string",
+            "defaultValue": "1.0",
+            "metadata": {
+                "description": "This value must be changed from a previous deployment to ensure the extension will run"
+            }
+        },
+        "iisdsc2UpdateTagVersion": {
+            "type": "string",
+            "defaultValue": "1.0",
+            "metadata": {
+                "description": "This value must be changed from a previous deployment to ensure the extension will run"
+            }
+        }
+    },
+    "variables": {
+        "TPVM007ImagePublisher": "MicrosoftWindowsServer",
+        "TPVM007ImageOffer": "WindowsServer",
+        "TPVM007OSDiskName": "TPVM007OSDisk",
+        "TPVM007VmSize": "Standard_DS1_v2",
+        "TPVM007VnetID": "/subscriptions/e2e75f95-ca9b-4d7d-ad9a-f8efe3794d28/resourceGroups/AzurePOC_Network/providers/Microsoft.Network/virtualNetworks/AzurePOCvnet",
+        "TPVM007SubnetRef": "[concat(variables('TPVM007VnetID'), '/subnets/', 'WebServers')]",
+        "TPVM007StorageAccountContainerName": "vhds",
+        "TPVM007NicName": "[concat(parameters('TPVM007Name'), 'NIC')]",
+        "Artifact LocationArchiveFolder": "DSC",
+        "Artifact LocationArchiveFileName": "Artifact Location.zip",
+        "iisdscArchiveFolder": "DSC",
+        "iisdscArchiveFileName": "iisdsc.zip",
+        "iisdsc2ArchiveFolder": "DSC",
+        "iisdsc2ArchiveFileName": "iisdsc2.zip"
+    },
+    "resources": [
+        {
+            "name": "[variables('TPVM007NicName')]",
+            "type": "Microsoft.Network/networkInterfaces",
+            "location": "australiasoutheast",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [ ],
+            "tags": {
+                "displayName": "TPVM007Nic"
+            },
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('TPVM007SubnetRef')]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[parameters('TPVM007Name')]",
+            "type": "Microsoft.Compute/virtualMachines",
+            "location": "australiasoutheast",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkInterfaces', variables('TPVM007NicName'))]"
+            ],
+            "tags": {
+                "displayName": "TPVM007"
+            },
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[variables('TPVM007VmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[parameters('TPVM007Name')]",
+                    "adminUsername": "[parameters('TPVM007AdminUsername')]",
+                    "adminPassword": "[parameters('TPVM007AdminPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('TPVM007ImagePublisher')]",
+                        "offer": "[variables('TPVM007ImageOffer')]",
+                        "sku": "[parameters('TPVM007WindowsOSVersion')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "TPVM007OSDisk",
+                        "vhd": {
+                            "uri": "[concat('https://', 'testvmsdisks263', '.blob.core.windows.net/', variables('TPVM007StorageAccountContainerName'), '/', variables('TPVM007OSDiskName'), '.vhd')]"
+                        },
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('TPVM007NicName'))]"
+                        }
+                    ]
+                }
+            },
+            "resources": [
+                {
+                    "name": "Microsoft.Powershell.DSC",
+                    "type": "extensions",
+                    "location": "australiasoutheast",
+                    "apiVersion": "2015-06-15",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Compute/virtualMachines', parameters('TPVM007Name'))]"
+                    ],
+                    "tags": {
+                        "displayName": "iisdsc2"
+                    },
+                    "properties": {
+                        "publisher": "Microsoft.Powershell",
+                        "type": "DSC",
+                        "typeHandlerVersion": "2.9",
+                        "autoUpgradeMinorVersion": true,
+                        "forceUpdateTag": "[parameters('iisdsc2UpdateTagVersion')]",
+                        "settings": {
+                            "configuration": {
+                                "url": "[concat(parameters('_artifactsLocation'), '/', variables('iisdsc2ArchiveFolder'), '/', variables('iisdsc2ArchiveFileName'))]",
+                                "script": "iisdsc2.ps1",
+                                "function": "Main"
+                            },
+                            "configurationArguments": {
+                                "nodeName": "[parameters('TPVM007Name')]"
+                            }
+                        },
+                        "protectedSettings": {
+                            "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]"
+                        }
+                    }
+                }
+                
+                
+            ]
+        }
+    ],
+    "outputs": {
+    }
+}
